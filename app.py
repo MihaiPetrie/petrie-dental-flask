@@ -1,6 +1,16 @@
-from flask import Flask, render_template_string, request
+from flask import Flask, render_template_string, request, send_from_directory
+import os
 
 app = Flask(__name__)
+
+# Endpoint pentru favicon
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(
+        os.path.join(app.root_path, 'static'),
+        'favicon.png',  # Nume exact fișier PNG din /static
+        mimetype='image/png'
+    )
 
 treatments = [
     {"id": 1, "description": "Consultatie", "price": 149},
@@ -18,143 +28,89 @@ treatments = [
     {"id": 23, "description": "Mentinatoare de spatiu mobile", "price": 656},
     {"id": 24, "description": "Sigilare /dinte", "price": 108},
     {"id": 25, "description": "Fluorizare", "price": 94},
-    {"id": 26, "description": "Detartraj cu ultrasunete si periaj profesional/ambele arcade", "price": 150}
+    {"id": 26, "description": "Detartraj cu ultrasunete si periaj profesional/arcada", "price": 120},
+    # Adaugă restul tratamentelor după nevoie
 ]
 
-def find_combinations_with_priorities_and_exclude(items, budget, prioritized, max_solutions=20):
+def find_combinations_with_priorities_and_exclude(items, budget, prioritized, exclude):
     base_sum = sum(item['price'] for item in prioritized)
     if base_sum > budget:
         return []
+    combos = []
+    for item in items:
+        if item in prioritized or item in exclude:
+            continue
+        new_combo = prioritized + [item]
+        new_sum = sum(x['price'] for x in new_combo)
+        if new_sum <= budget:
+            combos.append(new_combo)
+    return combos
 
-    rest_budget = budget - base_sum
-    solutions = []
-
-    def backtrack(remaining, combo, start):
-        if remaining == 0:
-            sol = {}
-            for t in prioritized + combo:
-                tid = t['id']
-                if tid not in sol:
-                    sol[tid] = {"description": t["description"], "price": t["price"], "count": 0}
-                sol[tid]["count"] += 1
-            solutions.append(list(sol.values()))
-            return
-        if remaining < 0 or len(solutions) >= max_solutions:
-            return
-        for i in range(start, len(items)):
-            backtrack(remaining - items[i]['price'], combo + [items[i]], i)
-    if rest_budget == 0:
-        sol = [{"description": t["description"], "price": t["price"], "count": 1, "id": t["id"]} for t in prioritized]
-        solutions.append(sol)
-    else:
-        backtrack(rest_budget, [], 0)
-    return solutions
-
-HTML_TEMPLATE = '''
-<!DOCTYPE html>
-<html lang="ro">
-<head>
-    <meta charset="UTF-8">
-    <title>Selector Tratamente | Petrie Dental Solutions</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        body { font-family: 'Segoe UI', Arial, sans-serif; background: #f4f6fa; margin: 0; padding: 0; }
-        .container { max-width: 800px; margin: 0 auto 0 auto; background: #fff; box-shadow: 0 0 15px #ddd; padding: 24px; border-radius: 14px; margin-top: 18px; }
-        h1 { color: #1e3a7d; font-size: 1.6em; margin-bottom: 14px; }
-        label, .treatment-label { font-size: 1.1em; }
-        .section-title { margin-top: 20px; font-weight: bold; color: #144d6e; }
-        input[type="number"] { padding: 7px; font-size: 1.2em; width: 120px; border-radius: 6px; border: 1px solid #ccc;}
-        .checkbox-group { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-bottom: 10px;}
-        .treatment-label { display: flex; align-items: center; padding: 4px 0; }
-        .btn { background: #274da4; color: #fff; font-weight: bold; border: none; padding: 10px 22px; font-size: 1.18em; border-radius: 6px; cursor: pointer; margin-top: 18px;}
-        .btn:hover { background: #1c366e; }
-        .footer { background: #e9e9e9; color: #5a6274; text-align: center; padding: 8px 0; border-radius: 0 0 14px 14px; margin-top: 20px; font-style: italic;}
-        .result { background: #f6fbee; border: 1px solid #b8d7a5; margin-top: 18px; padding: 14px 10px 10px 20px; border-radius: 7px; font-size: 1.09em; }
-        .error { color: #b8000f; font-weight: bold; }
-        @media (max-width: 600px) {
-            .container { padding: 10px; border-radius: 7px; margin-top: 2px;}
-            h1 { font-size: 1.18em;}
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Selector combinații tratamente <br><span style="font-size:0.78em;color:#415ba8;">(prioritizare și excludere)</span></h1>
-        <form method="post">
-            <div style="margin-bottom:10px;">
-                <label for="budget" style="font-weight:bold;font-size:1.22em;">Introduceți bugetul dorit (lei):</label>
-                <input name="budget" type="number" id="budget" min="1" step="1" required value="{{budget if budget else ''}}">
-            </div>
-
-            <div class="section-title">1. Selectați tratamentele OBLIGATORII în combinație:</div>
-            <div class="checkbox-group">
-                {% for t in treatments %}
-                    <label class="treatment-label">
-                        <input type="checkbox" name="prioritize" value="{{t.id}}" {% if t.id|string in prioritize_ids %}checked{% endif %}>
-                        {{t.description}} <span style="color:#555;">({{t.price}} lei)</span>
-                    </label>
-                {% endfor %}
-            </div>
-
-            <div class="section-title">2. Selectați tratamentele pe care doriți să le EXCLUDEȚI:</div>
-            <div class="checkbox-group">
-                {% for t in treatments %}
-                    <label class="treatment-label">
-                        <input type="checkbox" name="exclude" value="{{t.id}}" {% if t.id|string in exclude_ids %}checked{% endif %}>
-                        {{t.description}} <span style="color:#555;">({{t.price}} lei)</span>
-                    </label>
-                {% endfor %}
-            </div>
-
-            <button class="btn" type="submit">Caută combinațiile exacte</button>
-        </form>
-        {% if result %}
-            <div class="result">{{ result|safe }}</div>
-        {% endif %}
-    </div>
-    <div class="footer">
-        Petrie Dental Solutions &copy; 2025
-    </div>
-</body>
-</html>
-'''
-
-from markupsafe import escape
-
-@app.route("/", methods=["GET", "POST"])
+@app.route('/', methods=['GET', 'POST'])
 def index():
-    result = ""
-    budget = ""
+    result = ''
+    budget = None
     prioritize_ids = []
     exclude_ids = []
-    if request.method == "POST":
-        budget = request.form.get("budget", "")
-        try:
-            budget_val = int(budget)
-            if budget_val <= 0:
-                raise ValueError
-        except:
-            result = '<span class="error">Introduceți o sumă validă și pozitivă!</span>'
-            return render_template_string(HTML_TEMPLATE, treatments=treatments, result=result, budget=budget, prioritize_ids=[], exclude_ids=[])
-        prioritize_ids = request.form.getlist("prioritize")
-        exclude_ids = request.form.getlist("exclude")
-        prioritized = [t for t in treatments if str(t["id"]) in prioritize_ids]
-        excluded = [t for t in treatments if str(t["id"]) in exclude_ids]
+
+    if request.method == 'POST':
+        budget = int(request.form.get('budget', 0))
+        prioritize_ids = [int(x) for x in request.form.getlist('prioritize')]
+        exclude_ids = [int(x) for x in request.form.getlist('exclude')]
+
+        prioritized = [t for t in treatments if t['id'] in prioritize_ids]
+        excluded = [t for t in treatments if t['id'] in exclude_ids]
         allowed = [t for t in treatments if t not in excluded]
 
-        if any(t in excluded for t in prioritized):
-            result = '<span class="error">Nu poți bifa același tratament ca prioritar și exclus!</span>'
+        combos = find_combinations_with_priorities_and_exclude(allowed, budget, prioritized, excluded)
+        if not combos:
+            result = '<span class="error">Nu există nicio combinație exactă cu aceste priorități/excluderi și buget.</span>'
         else:
-            combos = find_combinations_with_priorities_and_exclude(allowed, int(budget), prioritized)
-            if not combos:
-                result = '<span class="error">Nu există nicio combinație exactă cu aceste priorități/excluderi și buget.</span>'
-            else:
-                for idx, combo in enumerate(combos, 1):
-                    result += f"<strong style='color:#2346a8;'>--- Combinația {idx} ---</strong><br>"
-                    for t in combo:
-                        result += f"<b>{escape(t['description'])}</b> &nbsp;|&nbsp; Preț: {t['price']} lei &times; {t['count']} = <b>{t['price']*t['count']} lei</b><br>"
-                    total = sum(t['price']*t['count'] for t in combo)
-                    result += f"<span style='color:#248a21;font-weight:bold;'>Total: {total} lei</span><br><br>"
+            for idx, combo in enumerate(combos, 1):
+                result += f"<strong>Combinația {idx}</strong>:<br>"
+                for t in combo:
+                    result += f"&nbsp;&nbsp;{t['description']} ({t['price']} lei)<br>"
+                total = sum(t['price'] for t in combo)
+                result += f'<b style="color:#2482a1;font-weight:bold;">Total: {total} lei</b><br><br>'
+
+    HTML_TEMPLATE = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <title>Selector Tratamente | Petrie Dental Solutions</title>
+        <link rel="icon" href="/favicon.ico" type="image/png">
+        <style>
+            body { font-family: Arial, sans-serif; background: #f7fafd; padding: 40px; }
+            h2 { color: #1d4675; }
+            .error { color: red; }
+        </style>
+    </head>
+    <body>
+        <h2>Selector combinații tratamente<br>
+        <span style="font-size:18px;color:#2482a1">(prioritizare și excludere)</span></h2>
+        <form method="post">
+            <label for="budget"><b>Introduceți bugetul dorit (lei):</b></label>
+            <input type="number" name="budget" required>
+            <br><br>
+            <b>1. Selectați tratamentele OBLIGATORII în combinație:</b><br>
+            {% for t in treatments %}
+                <input type="checkbox" name="prioritize" value="{{t['id']}}"> {{t['description']}} ({{t['price']}} lei)<br>
+            {% endfor %}
+            <br>
+            <b>2. Selectați tratamentele de EXCLUS:</b><br>
+            {% for t in treatments %}
+                <input type="checkbox" name="exclude" value="{{t['id']}}"> {{t['description']}}<br>
+            {% endfor %}
+            <br>
+            <input type="submit" value="Calculează combinații">
+        </form>
+        <hr>
+        <div>{{result|safe}}</div>
+    </body>
+    </html>
+    """
+
     return render_template_string(
         HTML_TEMPLATE,
         treatments=treatments,
@@ -165,4 +121,4 @@ def index():
     )
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)
