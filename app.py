@@ -1,8 +1,10 @@
 from flask import Flask, render_template_string, request, send_from_directory
 import os
+from itertools import combinations, product
 
 app = Flask(__name__)
 
+# Endpoint pentru favicon
 @app.route('/favicon.ico')
 def favicon():
     return send_from_directory(
@@ -11,6 +13,7 @@ def favicon():
         mimetype='image/png'
     )
 
+# Lista tratamentelor
 treatments = [
     {"id": 1, "description": "Consultatie", "price": 149},
     {"id": 2, "description": "Tratament Carie simplu", "price": 157},
@@ -71,40 +74,41 @@ HTML_TEMPLATE = '''
         {{ result|safe }}
     {% endif %}
     <div class="footer">
-        &copy; 2025 Petrie Dental Solution
+        Produs de Mihai Petrie &copy; 2025 Petrie Dental Solution
     </div>
 </body>
 </html>
 '''
 
-def find_combinations_with_priorities_and_exclude_repetitive(items, budget, priorities, excluded, max_types=4):
+def find_combinations_with_priorities_and_exclude_repetitive(items, budget, priorities, excluded, max_types=4, max_results=10):
     priorities_set = set(priorities)
     excluded_set = set(excluded)
     if priorities_set & excluded_set:
         return '<div class="error">Nu poți selecta același tratament ca prioritar și exclus!</div>'
     available = [t for t in items if str(t["id"]) not in excluded_set]
-    # Algoritm: Generăm toate combinațiile posibile cu repetare, pentru 1..max_types tipuri distincte,
-    # și pentru fiecare tratament calculăm de câte ori trebuie folosit ca să ajungem la suma exactă
     solutions = []
-    from itertools import combinations, product
     for r in range(1, max_types+1):
         for type_combo in combinations(available, r):
-            # Se încearcă toate repartizările de cantități posibile pentru fiecare tip
             prices = [t['price'] for t in type_combo]
-            max_counts = [budget // p for p in prices]
-            # Se parcurg toate variantele de multiplicatori (câte de fiecare)
+            max_counts = [min(20, budget // p) for p in prices]  # maxim 20 din fiecare tip
             for counts in product(*[range(1, mc+1) for mc in max_counts]):
                 total = sum(c*p for c, p in zip(counts, prices))
-                # Toate prioritățile trebuie să fie incluse (cel puțin o dată)
                 ids_in_combo = {str(t['id']) for t in type_combo}
                 if priorities_set and not priorities_set.issubset(ids_in_combo):
                     continue
                 if total == budget:
-                    # Pregătim lista efectivă cu (tratament, cantitate)
+                    # Verifică dacă NU există niciun tratament exclus (siguranță suplimentară)
+                    if excluded_set and (ids_in_combo & excluded_set):
+                        continue
                     solutions.append(list(zip(type_combo, counts)))
+                    if len(solutions) >= max_results:
+                        break
+            if len(solutions) >= max_results:
+                break
+        if len(solutions) >= max_results:
+            break
     if not solutions:
         return '<div class="error">Nu există nicio combinație cu aceste priorități, excluderi și buget exact!</div>'
-    # HTML
     html = ""
     for idx, combo in enumerate(solutions, 1):
         html += f'<div class="combo-box"><b>Combinația {idx}:</b><ul>'
