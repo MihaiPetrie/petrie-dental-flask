@@ -4,16 +4,6 @@ from itertools import combinations, product
 
 app = Flask(__name__)
 
-# Servire favicon
-@app.route('/favicon.ico')
-def favicon():
-    return send_from_directory(
-        os.path.join(app.root_path, 'static'),
-        'favicon.png',
-        mimetype='image/png'
-    )
-
-# Lista tratamentelor
 treatments = [
     {"id": 1, "description": "Consultatie", "price": 149},
     {"id": 2, "description": "Tratament Carie simplu", "price": 157},
@@ -30,91 +20,125 @@ treatments = [
     {"id": 23, "description": "Mentinatoare de spatiu mobile", "price": 656},
     {"id": 24, "description": "Sigilare /dinte", "price": 108},
     {"id": 25, "description": "Fluorizare", "price": 94},
-    {"id": 26, "description": "Detartraj cu ultrasunete si periaj profesional/arcada", "price": 120},
+    {"id": 26, "description": "Detartraj cu ultrasunete si periaj profesional/arcada", "price": 109},
+    # Adaugă restul după nevoie
 ]
 
-# Functie pentru generarea combinatiilor (maxim 4 tipuri, suma exacta, cu repetitii, prioritizand tratamente scumpe)
-def find_combinations_max4_types_exact_sum(treatments, budget, max_types=4, max_solutions=20):
+# Funcția cu excludere și combinații 2, 3, 4 tipuri
+def find_exact_combinations(items, budget, excluded_ids=[], min_types=2, max_types=4):
     results = []
-    # Sorteaza tratamentele descrescator dupa pret
-    treatments_sorted = sorted(treatments, key=lambda x: -x['price'])
-    n = len(treatments_sorted)
-    for k in range(1, max_types+1):
-        # Pentru fiecare submultime de k tipuri de tratamente
-        for subset in combinations(treatments_sorted, k):
-            # Max nr de fiecare tratament = buget // pret
-            max_counts = [budget // t['price'] for t in subset]
-            # Genereaza toate variantele posibile de repetiții
-            for counts in product(*(range(c+1) for c in max_counts)):
-                if sum(counts) == 0:
-                    continue
-                total = sum(t['price'] * cnt for t, cnt in zip(subset, counts))
+    filtered_items = [item for item in items if str(item['id']) not in excluded_ids]
+    for n_types in range(min_types, max_types + 1):  # 2, 3, 4 tipuri
+        for combo in combinations(filtered_items, n_types):
+            prices = [item['price'] for item in combo]
+            max_counts = [budget // p if p else 0 for p in prices]
+            # Enumerăm toate combinațiile posibile de număr de bucăți pentru fiecare tip
+            for counts in product(*[range(1, m + 1) for m in max_counts]):
+                total = sum(c * p for c, p in zip(counts, prices))
                 if total == budget:
-                    combo = []
-                    for t, cnt in zip(subset, counts):
-                        if cnt > 0:
-                            combo.append({"description": t['description'], "price": t['price'], "count": cnt})
-                    # Pentru unicitate
-                    if combo not in results:
-                        results.append(combo)
-                if len(results) >= max_solutions:
-                    return results
+                    # Construim combinația rezultat
+                    result = []
+                    for i, item in enumerate(combo):
+                        result.append({
+                            "description": item['description'],
+                            "price": item['price'],
+                            "count": counts[i]
+                        })
+                    results.append(result)
     return results
 
-@app.route('/', methods=['GET', 'POST'])
-def index():
-    result_html = ''
-    budget = None
-    if request.method == 'POST':
-        try:
-            budget = int(request.form.get('budget', 0))
-            if budget <= 0:
-                raise ValueError
-        except ValueError:
-            result_html = '<div class="error">Introduceți o sumă validă!</div>'
-        else:
-            solutions = find_combinations_max4_types_exact_sum(treatments, budget)
-            if not solutions:
-                result_html = '<div class="error">Nu există combinații posibile pentru acest buget.</div>'
-            else:
-                for idx, combo in enumerate(solutions, 1):
-                    result_html += f"<strong>Combinația {idx}:</strong><br>"
-                    for t in combo:
-                        result_html += f"{t['description']} ({t['price']} lei) × {t['count']} = <b>{t['price']*t['count']} lei</b><br>"
-                    result_html += f"<b style='color:#218721'>Total: {budget} lei</b><br><br>"
-
-    HTML_TEMPLATE = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="utf-8">
-        <title>Selector Tratamente | Petrie Dental Solutions</title>
-        <link rel="icon" href="/favicon.ico" type="image/png">
-        <style>
-            body { font-family: Segoe UI, Arial, sans-serif; background: #f7fafd; padding: 30px; }
-            h2 { color: #174080; }
-            .error { color: #bb1313; font-weight: bold; }
-            input[type="number"] { font-size: 1.2em; width: 120px;}
-            input[type="submit"] { background: #2176bd; color: white; border: none; font-size: 1.1em; padding: 7px 18px; border-radius: 7px;}
-            input[type="submit"]:hover { background: #2482a1;}
-            hr {margin: 20px 0;}
-        </style>
-    </head>
-    <body>
-        <h2>Selector combinații tratamente<br>
-        <span style="font-size:18px;color:#2482a1">(maxim 4 tipuri distincte, suma exactă)</span></h2>
-        <form method="post">
-            <label for="budget"><b>Introduceți bugetul dorit (lei):</b></label>
-            <input type="number" name="budget" required>
-            <input type="submit" value="Caută combinații">
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <title>Selector combinații tratamente – Dr. Breban Estella</title>
+    <link rel="icon" type="image/png" href="{{ url_for('faviCon') }}">
+    <style>
+        body { font-family: Segoe UI, Arial, sans-serif; background: #f4f8fc; margin: 0; }
+        .container { max-width: 700px; margin: 32px auto; background: #fff; border-radius: 10px; box-shadow: 0 2px 8px #9ec7d3a0; padding: 32px 36px 60px 36px; }
+        h1 { color: #256293; font-size: 2.2em; margin-bottom: 0; }
+        h2 { color: #3572b2; margin: 8px 0 18px 0; }
+        label { font-weight: bold; }
+        .combi { background: #f1f8ff; border-left: 4px solid #45a1c6; margin-bottom: 20px; padding: 13px 16px 7px 16px; border-radius: 6px; }
+        .combi strong { color: #257697; }
+        .total { font-weight: bold; color: #2c8d2a; font-size: 1.1em; }
+        .footer { color: #768799; font-size: 0.98em; text-align: right; position: fixed; left: 0; right: 0; bottom: 5px; padding: 6px 34px 6px 0; }
+        .by { color: #1d446b; font-weight: 500; letter-spacing: 0.5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Selector combinații tratamente</h1>
+        <h2 style="margin-bottom:28px;">Dr. Breban Estella</h2>
+        <form method="POST">
+            <label for="budget">Introduceți bugetul dorit (lei):</label>
+            <input type="number" name="budget" min="1" required style="margin-left:8px;width:90px;" value="{{ budget or '' }}">
+            <br><br>
+            <label>Excludeți tratamente (opțional):</label><br>
+            {% for t in treatments %}
+                <label style="font-weight:normal;">
+                    <input type="checkbox" name="excluded" value="{{t['id']}}"
+                        {% if excluded and t['id']|string in excluded %} checked {% endif %}>
+                    {{t['description']}} <span style="color:#aaa;">({{t['price']}} lei)</span>
+                </label><br>
+            {% endfor %}
+            <br>
+            <button type="submit" style="padding:6px 24px;background:#1d446b;color:#fff;border-radius:5px;font-size:1em;border:none;">Caută combinații</button>
         </form>
-        <hr>
-        <div>{{result|safe}}</div>
-    </body>
-    </html>
-    """
+        <hr style="margin:28px 0;">
+        {% if results is defined %}
+            {% if results %}
+                {% for idx, combo in enumerate(results, 1) %}
+                    <div class="combi">
+                        <strong>Combinatia {{idx}}:</strong><br>
+                        {% for t in combo %}
+                            {{ t['description'] }} ({{t['price']}} lei) × {{t['count']}}
+                            = <strong>{{ t['price'] * t['count'] }} lei</strong> <br>
+                        {% endfor %}
+                        <div class="total">Total: {{ combo | sum(attribute='price', attribute2='count') }} lei</div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div style="color:#c21c3e;margin:18px 0 10px 0;font-weight:bold;">
+                    Nu există combinații pentru bugetul ales, cu aceste excluderi.
+                </div>
+            {% endif %}
+        {% endif %}
+    </div>
+    <div class="footer">
+        <span class="by">&copy;2025 Petrie Dental Solution</span>
+    </div>
+</body>
+</html>
+"""
 
-    return render_template_string(HTML_TEMPLATE, result=result_html)
+# Helper pentru sum în template (cu două atribute)
+@app.template_filter('sum')
+def sum_combo(combo, attribute=None, attribute2=None):
+    if attribute and attribute2:
+        return sum(t[attribute]*t[attribute2] for t in combo)
+    elif attribute:
+        return sum(t[attribute] for t in combo)
+    else:
+        return sum(combo)
+
+# Favicon endpoint (asigură-te că ai favicon.png în /static)
+@app.route('/favicon.ico')
+def faviCon():
+    return send_from_directory(os.path.join(app.root_path, 'static'), 'favicon.png', mimetype='image/png')
+
+@app.route("/", methods=["GET", "POST"])
+def index():
+    budget = None
+    results = None
+    excluded = []
+    if request.method == "POST":
+        budget = request.form.get("budget")
+        excluded = request.form.getlist("excluded")
+        if budget and budget.isdigit():
+            results = find_exact_combinations(treatments, int(budget), excluded_ids=excluded)
+    return render_template_string(HTML_TEMPLATE, treatments=treatments, results=results, budget=budget, excluded=excluded)
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5000)
+    app.run(debug=True)
