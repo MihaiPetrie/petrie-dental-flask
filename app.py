@@ -1,10 +1,8 @@
 from flask import Flask, render_template_string, request, send_from_directory
 import os
-from itertools import combinations
 
 app = Flask(__name__)
 
-# Endpoint pentru favicon
 @app.route('/favicon.ico')
 def favicon():
     return send_from_directory(
@@ -13,7 +11,6 @@ def favicon():
         mimetype='image/png'
     )
 
-# Lista tratamentelor
 treatments = [
     {"id": 1, "description": "Consultatie", "price": 149},
     {"id": 2, "description": "Tratament Carie simplu", "price": 157},
@@ -74,37 +71,46 @@ HTML_TEMPLATE = '''
         {{ result|safe }}
     {% endif %}
     <div class="footer">
-        &copy; 2025 Mihai Petrie & Petrie Dental Solution
+        &copy; 2025 Petrie Dental Solution
     </div>
 </body>
 </html>
 '''
 
-def find_combinations_with_priorities_and_exclude(items, budget, priorities, excluded, max_types=4):
-    priorities_set = set(str(x) for x in priorities)
-    excluded_set = set(str(x) for x in excluded)
+def find_combinations_with_priorities_and_exclude_repetitive(items, budget, priorities, excluded, max_types=4):
+    priorities_set = set(priorities)
+    excluded_set = set(excluded)
     if priorities_set & excluded_set:
         return '<div class="error">Nu poți selecta același tratament ca prioritar și exclus!</div>'
     available = [t for t in items if str(t["id"]) not in excluded_set]
-    combos = []
+    # Algoritm: Generăm toate combinațiile posibile cu repetare, pentru 1..max_types tipuri distincte,
+    # și pentru fiecare tratament calculăm de câte ori trebuie folosit ca să ajungem la suma exactă
+    solutions = []
+    from itertools import combinations, product
     for r in range(1, max_types+1):
-        for combo in combinations(available, r):
-            combo_ids = {str(t["id"]) for t in combo}
-            if priorities_set and not priorities_set.issubset(combo_ids):
-                continue
-            if combo_ids & excluded_set:
-                continue
-            total = sum(t["price"] for t in combo)
-            if total == budget:
-                combos.append(combo)
-    if not combos:
+        for type_combo in combinations(available, r):
+            # Se încearcă toate repartizările de cantități posibile pentru fiecare tip
+            prices = [t['price'] for t in type_combo]
+            max_counts = [budget // p for p in prices]
+            # Se parcurg toate variantele de multiplicatori (câte de fiecare)
+            for counts in product(*[range(1, mc+1) for mc in max_counts]):
+                total = sum(c*p for c, p in zip(counts, prices))
+                # Toate prioritățile trebuie să fie incluse (cel puțin o dată)
+                ids_in_combo = {str(t['id']) for t in type_combo}
+                if priorities_set and not priorities_set.issubset(ids_in_combo):
+                    continue
+                if total == budget:
+                    # Pregătim lista efectivă cu (tratament, cantitate)
+                    solutions.append(list(zip(type_combo, counts)))
+    if not solutions:
         return '<div class="error">Nu există nicio combinație cu aceste priorități, excluderi și buget exact!</div>'
+    # HTML
     html = ""
-    for idx, combo in enumerate(combos, 1):
+    for idx, combo in enumerate(solutions, 1):
         html += f'<div class="combo-box"><b>Combinația {idx}:</b><ul>'
-        for t in combo:
-            html += f'<li>{t["description"]} ({t["price"]} lei)</li>'
-        html += f'</ul><span class="total">Total: {sum(t["price"] for t in combo)} lei</span></div>'
+        for t, cnt in combo:
+            html += f'<li>{t["description"]} | Preț: {t["price"]} lei × {cnt} = <b>{t["price"]*cnt} lei</b></li>'
+        html += f'</ul><span class="total">Total: {sum(t["price"]*cnt for t, cnt in combo)} lei</span></div>'
     return html
 
 @app.route("/", methods=["GET", "POST"])
@@ -121,7 +127,7 @@ def index():
         except:
             result = '<div class="error">Introduceți o sumă validă!</div>'
         if budget and not result:
-            result = find_combinations_with_priorities_and_exclude(
+            result = find_combinations_with_priorities_and_exclude_repetitive(
                 treatments, budget, priorities, excluded, max_types=4
             )
     return render_template_string(HTML_TEMPLATE,
