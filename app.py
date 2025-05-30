@@ -74,7 +74,7 @@ HTML_TEMPLATE = '''
         {{ result|safe }}
     {% endif %}
     <div class="footer">
-        Produs de Mihai Petrie &copy; 2025 Petrie Dental Solution
+        &copy; 2025 Petrie Dental Solution
     </div>
 </body>
 </html>
