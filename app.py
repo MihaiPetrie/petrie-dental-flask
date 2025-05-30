@@ -33,7 +33,6 @@ treatments = [
     {"id": 26, "description": "Detartraj cu ultrasunete si periaj profesional/arcada", "price": 79},
 ]
 
-# HTML Template
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
 <html lang="ro">
@@ -75,39 +74,31 @@ HTML_TEMPLATE = '''
         {{ result|safe }}
     {% endif %}
     <div class="footer">
-        &copy; 2025 Petrie Dental Solution
+        &copy; 2025 Mihai Petrie & Petrie Dental Solution
     </div>
 </body>
 </html>
 '''
 
 def find_combinations_with_priorities_and_exclude(items, budget, priorities, excluded, max_types=4):
-    # Pregătește seturile
-    priorities_set = set(priorities)
-    excluded_set = set(excluded)
-    # Verifică să nu fie vreo prioritate și exclusă simultan!
+    priorities_set = set(str(x) for x in priorities)
+    excluded_set = set(str(x) for x in excluded)
     if priorities_set & excluded_set:
         return '<div class="error">Nu poți selecta același tratament ca prioritar și exclus!</div>'
-    # Creează lista de tratamente disponibile (exclus exclușii)
     available = [t for t in items if str(t["id"]) not in excluded_set]
-    # Toate combinațiile posibile de 1 până la max_types (fără dubluri)
     combos = []
     for r in range(1, max_types+1):
         for combo in combinations(available, r):
             combo_ids = {str(t["id"]) for t in combo}
-            # Include doar dacă TOATE prioritățile sunt prezente
             if priorities_set and not priorities_set.issubset(combo_ids):
                 continue
-            # Nu permite să aibă și priorități și excluderi simultan
             if combo_ids & excluded_set:
                 continue
-            # Suma exactă
             total = sum(t["price"] for t in combo)
             if total == budget:
                 combos.append(combo)
     if not combos:
         return '<div class="error">Nu există nicio combinație cu aceste priorități, excluderi și buget exact!</div>'
-    # Construiește HTML pentru combinații găsite
     html = ""
     for idx, combo in enumerate(combos, 1):
         html += f'<div class="combo-box"><b>Combinația {idx}:</b><ul>'
