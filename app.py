@@ -27,7 +27,7 @@ treatments = [
     {"id": 20, "description": "Aparate si dispozitive utilizate in tratamentul malformatiilor congenitale", "price": 1094},
     {"id": 21, "description": "Slefuirea in scop ortodontic/dinte", "price": 28},
     {"id": 22, "description": "Reparatie aparat ortodontic", "price": 583},
-    {"id": 23, "description": "Mentnatoare de spatiu mobile", "price": 656},
+    {"id": 23, "description": "Mentinatoare de spatiu mobile", "price": 656},
     {"id": 24, "description": "Sigilare /dinte", "price": 108},
     {"id": 25, "description": "Fluorizare", "price": 94},
     {"id": 26, "description": "Detartraj cu ultrasunete si periaj profesional/arcada", "price": 79},
